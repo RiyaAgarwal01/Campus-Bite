@@ -1,0 +1,267 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered CampusBite student or admin user profile.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "role": { "type": "string", "enum": ["student", "admin"] },
+        "collegeName": { "type": "string", "maxLength": 140 },
+        "hostelName": { "type": "string", "maxLength": 140 },
+        "roomNumber": { "type": "string", "maxLength": 40 },
+        "addresses": { "type": "array" },
+        "favorites": { "type": "array" },
+        "referralCode": { "type": "string", "maxLength": 24 },
+        "walletBalance": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role", "addresses", "favorites", "createdAt"]
+    },
+    "AdminMarker": {
+      "title": "AdminMarker",
+      "description": "Trusted admin role assignment marker.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 160 },
+        "grantedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "grantedAt"]
+    },
+    "FoodItem": {
+      "title": "FoodItem",
+      "description": "Menu item offered by CampusBite kitchens.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "description": { "type": "string", "minLength": 5, "maxLength": 500 },
+        "category": {
+          "type": "string",
+          "enum": ["Breakfast", "Lunch", "Dinner", "Snacks", "Beverages", "Thalis", "Homemade Meals"]
+        },
+        "price": { "type": "number" },
+        "image": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "availability": { "type": "boolean" },
+        "preparationTime": { "type": "number" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "isVeg": { "type": "boolean" },
+        "isPopular": { "type": "boolean" },
+        "isTodaysSpecial": { "type": "boolean" },
+        "isBestseller": { "type": "boolean" },
+        "ingredients": { "type": "array" },
+        "calories": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "description", "category", "price", "image", "availability", "preparationTime", "rating", "isVeg"]
+    },
+    "UserCart": {
+      "title": "UserCart",
+      "description": "Persistent shopping cart for a logged-in student.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "items": { "type": "array" },
+        "couponCode": { "type": "string", "maxLength": 32 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "items", "updatedAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer meal order and delivery tracking record.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "customerPhone": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "deliveryCharge": { "type": "number" },
+        "discount": { "type": "number" },
+        "couponCode": { "type": "string", "maxLength": 32 },
+        "totalAmount": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["COD", "UPI", "RAZORPAY"] },
+        "paymentStatus": { "type": "string", "enum": ["pending", "paid", "failed", "refunded"] },
+        "paymentReference": { "type": "string", "maxLength": 128 },
+        "orderStatus": {
+          "type": "string",
+          "enum": ["placed", "accepted", "preparing", "out_for_delivery", "delivered", "cancelled", "rejected"]
+        },
+        "deliveryAddress": { "type": "object" },
+        "instructions": { "type": "string", "maxLength": 300 },
+        "estimatedDeliveryTime": { "type": "string", "maxLength": 60 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "orderId",
+        "userId",
+        "customerName",
+        "customerPhone",
+        "items",
+        "subtotal",
+        "deliveryCharge",
+        "discount",
+        "totalAmount",
+        "paymentMethod",
+        "paymentStatus",
+        "orderStatus",
+        "deliveryAddress",
+        "createdAt"
+      ]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "Student weekly or monthly tiffin meal subscription.",
+      "type": "object",
+      "properties": {
+        "subscriptionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "planType": {
+          "type": "string",
+          "enum": ["Weekly Lunch", "Weekly Dinner", "Weekly Lunch + Dinner", "Monthly Lunch", "Monthly Dinner", "Monthly Lunch + Dinner"]
+        },
+        "cadence": { "type": "string", "enum": ["weekly", "monthly"] },
+        "mealSlot": { "type": "string", "enum": ["lunch", "dinner", "both"] },
+        "price": { "type": "number" },
+        "startDate": { "type": "string", "maxLength": 30 },
+        "endDate": { "type": "string", "maxLength": 30 },
+        "totalMeals": { "type": "number" },
+        "remainingMeals": { "type": "number" },
+        "preferredMeals": { "type": "array" },
+        "dietaryPreference": { "type": "string", "enum": ["Pure Veg", "Veg + Egg"] },
+        "deliveryAddress": { "type": "string", "maxLength": 240 },
+        "status": { "type": "string", "enum": ["active", "paused", "cancelled", "completed"] },
+        "paymentStatus": { "type": "string", "enum": ["pending", "paid"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "subscriptionId",
+        "userId",
+        "customerName",
+        "planType",
+        "price",
+        "startDate",
+        "endDate",
+        "totalMeals",
+        "remainingMeals",
+        "status",
+        "createdAt"
+      ]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Student discount coupon code managed by admin.",
+      "type": "object",
+      "properties": {
+        "couponCode": { "type": "string", "minLength": 2, "maxLength": 32, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "discountType": { "type": "string", "enum": ["percentage", "flat"] },
+        "discountValue": { "type": "number" },
+        "maxDiscount": { "type": "number" },
+        "minOrderAmount": { "type": "number" },
+        "description": { "type": "string", "maxLength": 160 },
+        "expiryDate": { "type": "string", "maxLength": 30 },
+        "isActive": { "type": "boolean" },
+        "firstOrderOnly": { "type": "boolean" }
+      },
+      "required": ["couponCode", "discountType", "discountValue", "expiryDate", "isActive"]
+    },
+    "Banner": {
+      "title": "Banner",
+      "description": "Promotional campus offer banner.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "subtitle": { "type": "string", "maxLength": 180 },
+        "couponCode": { "type": "string", "maxLength": 32 },
+        "ctaLabel": { "type": "string", "maxLength": 40 },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "title", "subtitle", "isActive"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Customer rating and feedback for a food item.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "campus": { "type": "string", "maxLength": 100 },
+        "foodId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string", "minLength": 3, "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "userName", "foodId", "rating", "comment", "createdAt"]
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "General customer feedback and support inquiries.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "category": { "type": "string", "enum": ["Food Quality", "Delivery", "Pricing", "App Experience", "Other"] },
+        "message": { "type": "string", "minLength": 5, "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "userName", "category", "message", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private student and admin user profiles isolated per UID."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminMarker" },
+      "description": "Authoritative admin UID registry."
+    },
+    "/food_items/{foodId}": {
+      "schema": { "$ref": "#/entities/FoodItem" },
+      "description": "Publicly readable CampusBite menu catalog."
+    },
+    "/carts/{userId}": {
+      "schema": { "$ref": "#/entities/UserCart" },
+      "description": "Persistent shopping cart per authenticated user."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders readable only by owner or admin."
+    },
+    "/subscriptions/{subscriptionId}": {
+      "schema": { "$ref": "#/entities/Subscription" },
+      "description": "Weekly and monthly meal subscriptions readable by owner or admin."
+    },
+    "/coupons/{couponCode}": {
+      "schema": { "$ref": "#/entities/Coupon" },
+      "description": "Student discount coupons."
+    },
+    "/banners/{bannerId}": {
+      "schema": { "$ref": "#/entities/Banner" },
+      "description": "Promotional banners displayed on the storefront."
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/Review" },
+      "description": "Meal ratings and student reviews."
+    },
+    "/feedback/{feedbackId}": {
+      "schema": { "$ref": "#/entities/Feedback" },
+      "description": "Customer feedback submissions."
+    }
+  }
+}

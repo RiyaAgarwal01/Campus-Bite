@@ -1,0 +1,432 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connectivity health-check doc
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // =========================================================
+    // Global Primitives & Identity Helpers
+    // =========================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'riyaagarwal132002@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // =========================================================
+    // Validation Blueprints
+    // =========================================================
+    function isValidUser(data, userId) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role', 'addresses', 'favorites', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid', 'name', 'email', 'phone', 'role', 'collegeName', 'hostelName',
+          'roomNumber', 'addresses', 'favorites', 'referralCode', 'walletBalance',
+          'createdAt', 'updatedAt'
+        ])
+        && data.uid is string && data.uid == userId && isValidId(data.uid)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 20))
+        && data.role in ['student', 'admin']
+        && (!('collegeName' in data) || (data.collegeName is string && data.collegeName.size() <= 140))
+        && (!('hostelName' in data) || (data.hostelName is string && data.hostelName.size() <= 140))
+        && (!('roomNumber' in data) || (data.roomNumber is string && data.roomNumber.size() <= 40))
+        && data.addresses is list && data.addresses.size() <= 10
+        && (data.addresses.size() == 0 || data.addresses[0] is map)
+        && data.favorites is list && data.favorites.size() <= 100
+        && (data.favorites.size() == 0 || data.favorites[0] is string)
+        && (!('referralCode' in data) || (data.referralCode is string && data.referralCode.size() <= 24))
+        && (!('walletBalance' in data) || (data.walletBalance is number && data.walletBalance >= 0 && data.walletBalance <= 50000))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFoodItem(data, foodId) {
+      return data.keys().hasAll([
+          'id', 'name', 'description', 'category', 'price', 'image',
+          'availability', 'preparationTime', 'rating', 'isVeg', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'name', 'description', 'category', 'price', 'image',
+          'availability', 'preparationTime', 'rating', 'reviewCount', 'isVeg',
+          'isPopular', 'isTodaysSpecial', 'isBestseller', 'ingredients',
+          'calories', 'createdAt', 'updatedAt'
+        ])
+        && data.id is string && data.id == foodId && isValidId(data.id)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.description is string && data.description.size() >= 5 && data.description.size() <= 500
+        && data.category in ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Beverages', 'Thalis', 'Homemade Meals']
+        && data.price is number && data.price >= 10 && data.price <= 5000
+        && data.image is string && data.image.size() >= 1 && data.image.size() <= 1000
+        && data.availability is bool
+        && data.preparationTime is number && data.preparationTime >= 1 && data.preparationTime <= 180
+        && data.rating is number && data.rating >= 0 && data.rating <= 5
+        && (!('reviewCount' in data) || (data.reviewCount is number && data.reviewCount >= 0))
+        && data.isVeg is bool
+        && (!('isPopular' in data) || data.isPopular is bool)
+        && (!('isTodaysSpecial' in data) || data.isTodaysSpecial is bool)
+        && (!('isBestseller' in data) || data.isBestseller is bool)
+        && (!('ingredients' in data) || (data.ingredients is list && data.ingredients.size() <= 30 && (data.ingredients.size() == 0 || data.ingredients[0] is string)))
+        && (!('calories' in data) || (data.calories is number && data.calories >= 0 && data.calories <= 5000))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCart(data, userId) {
+      return data.keys().hasAll(['userId', 'items', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'items', 'couponCode', 'updatedAt'])
+        && data.userId is string && data.userId == userId && isValidId(data.userId)
+        && data.items is list && data.items.size() <= 50
+        && (data.items.size() == 0 || data.items[0] is map)
+        && (!('couponCode' in data) || (data.couponCode is string && data.couponCode.size() <= 32))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOrder(data, orderId) {
+      return data.keys().hasAll([
+          'orderId', 'userId', 'customerName', 'customerPhone', 'items',
+          'subtotal', 'deliveryCharge', 'discount', 'totalAmount',
+          'paymentMethod', 'paymentStatus', 'orderStatus', 'deliveryAddress',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'orderId', 'userId', 'customerName', 'customerPhone', 'items',
+          'subtotal', 'deliveryCharge', 'discount', 'couponCode', 'totalAmount',
+          'paymentMethod', 'paymentStatus', 'paymentReference', 'orderStatus',
+          'deliveryAddress', 'instructions', 'estimatedDeliveryTime',
+          'createdAt', 'updatedAt'
+        ])
+        && data.orderId is string && data.orderId == orderId && isValidId(data.orderId)
+        && data.userId is string && isValidId(data.userId)
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100
+        && data.customerPhone is string && data.customerPhone.size() >= 8 && data.customerPhone.size() <= 20
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 50 && data.items[0] is map
+        && data.subtotal is number && data.subtotal >= 0 && data.subtotal <= 50000
+        && data.deliveryCharge is number && data.deliveryCharge >= 0 && data.deliveryCharge <= 1000
+        && data.discount is number && data.discount >= 0 && data.discount <= 10000
+        && (!('couponCode' in data) || (data.couponCode is string && data.couponCode.size() <= 32))
+        && data.totalAmount is number && data.totalAmount >= 0 && data.totalAmount <= 50000
+        && data.paymentMethod in ['COD', 'UPI', 'RAZORPAY']
+        && data.paymentStatus in ['pending', 'paid', 'failed', 'refunded']
+        && (!('paymentReference' in data) || (data.paymentReference is string && data.paymentReference.size() <= 128))
+        && data.orderStatus in ['placed', 'accepted', 'preparing', 'out_for_delivery', 'delivered', 'cancelled', 'rejected']
+        && data.deliveryAddress is map
+        && (!('instructions' in data) || (data.instructions is string && data.instructions.size() <= 300))
+        && (!('estimatedDeliveryTime' in data) || (data.estimatedDeliveryTime is string && data.estimatedDeliveryTime.size() <= 60))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSubscription(data, subId) {
+      return data.keys().hasAll([
+          'subscriptionId', 'userId', 'customerName', 'planType', 'cadence',
+          'mealSlot', 'price', 'startDate', 'endDate', 'totalMeals',
+          'remainingMeals', 'status', 'paymentStatus', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'subscriptionId', 'userId', 'customerName', 'planType', 'cadence',
+          'mealSlot', 'price', 'startDate', 'endDate', 'totalMeals',
+          'remainingMeals', 'preferredMeals', 'dietaryPreference',
+          'deliveryAddress', 'status', 'paymentStatus', 'createdAt', 'updatedAt'
+        ])
+        && data.subscriptionId is string && data.subscriptionId == subId && isValidId(data.subscriptionId)
+        && data.userId is string && isValidId(data.userId)
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100
+        && data.planType in ['Weekly Lunch', 'Weekly Dinner', 'Weekly Lunch + Dinner', 'Monthly Lunch', 'Monthly Dinner', 'Monthly Lunch + Dinner']
+        && data.cadence in ['weekly', 'monthly']
+        && data.mealSlot in ['lunch', 'dinner', 'both']
+        && data.price is number && data.price >= 100 && data.price <= 25000
+        && data.startDate is string && data.startDate.size() >= 4 && data.startDate.size() <= 30
+        && data.endDate is string && data.endDate.size() >= 4 && data.endDate.size() <= 30
+        && data.totalMeals is number && data.totalMeals >= 1 && data.totalMeals <= 120
+        && data.remainingMeals is number && data.remainingMeals >= 0 && data.remainingMeals <= data.totalMeals
+        && (!('preferredMeals' in data) || (data.preferredMeals is list && data.preferredMeals.size() <= 20 && (data.preferredMeals.size() == 0 || data.preferredMeals[0] is string)))
+        && (!('dietaryPreference' in data) || data.dietaryPreference in ['Pure Veg', 'Veg + Egg'])
+        && (!('deliveryAddress' in data) || (data.deliveryAddress is string && data.deliveryAddress.size() <= 240))
+        && data.status in ['active', 'paused', 'cancelled', 'completed']
+        && data.paymentStatus in ['pending', 'paid']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCoupon(data, code) {
+      return data.keys().hasAll(['couponCode', 'discountType', 'discountValue', 'expiryDate', 'isActive'])
+        && data.keys().hasOnly([
+          'couponCode', 'discountType', 'discountValue', 'maxDiscount',
+          'minOrderAmount', 'description', 'expiryDate', 'isActive', 'firstOrderOnly'
+        ])
+        && data.couponCode is string && data.couponCode == code && isValidId(data.couponCode)
+        && data.discountType in ['percentage', 'flat']
+        && data.discountValue is number && data.discountValue >= 1 && data.discountValue <= 5000
+        && (!('maxDiscount' in data) || (data.maxDiscount is number && data.maxDiscount >= 0 && data.maxDiscount <= 5000))
+        && (!('minOrderAmount' in data) || (data.minOrderAmount is number && data.minOrderAmount >= 0 && data.minOrderAmount <= 10000))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 160))
+        && data.expiryDate is string && data.expiryDate.size() >= 4 && data.expiryDate.size() <= 30
+        && data.isActive is bool
+        && (!('firstOrderOnly' in data) || data.firstOrderOnly is bool);
+    }
+
+    function isValidBanner(data, bannerId) {
+      return data.keys().hasAll(['id', 'title', 'subtitle', 'isActive'])
+        && data.keys().hasOnly(['id', 'title', 'subtitle', 'couponCode', 'ctaLabel', 'isActive'])
+        && data.id is string && data.id == bannerId && isValidId(data.id)
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 100
+        && data.subtitle is string && data.subtitle.size() >= 2 && data.subtitle.size() <= 180
+        && (!('couponCode' in data) || (data.couponCode is string && data.couponCode.size() <= 32))
+        && (!('ctaLabel' in data) || (data.ctaLabel is string && data.ctaLabel.size() <= 40))
+        && data.isActive is bool;
+    }
+
+    function isValidReview(data, reviewId) {
+      return data.keys().hasAll(['id', 'userId', 'userName', 'foodId', 'rating', 'comment', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'userName', 'campus', 'foodId', 'rating', 'comment', 'createdAt'])
+        && data.id is string && data.id == reviewId && isValidId(data.id)
+        && data.userId is string && isValidId(data.userId)
+        && data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 80
+        && (!('campus' in data) || (data.campus is string && data.campus.size() <= 100))
+        && data.foodId is string && isValidId(data.foodId)
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.comment is string && data.comment.size() >= 3 && data.comment.size() <= 400
+        && data.createdAt is timestamp;
+    }
+
+    function isValidFeedback(data, feedbackId) {
+      return data.keys().hasAll(['id', 'userId', 'userName', 'category', 'message', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'userName', 'category', 'message', 'createdAt'])
+        && data.id is string && data.id == feedbackId && isValidId(data.id)
+        && data.userId is string && isValidId(data.userId)
+        && data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 80
+        && data.category in ['Food Quality', 'Delivery', 'Pricing', 'App Experience', 'Other']
+        && data.message is string && data.message.size() >= 5 && data.message.size() <= 500
+        && data.createdAt is timestamp;
+    }
+
+    // =========================================================
+    // Collection Rules
+    // =========================================================
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId)
+        && isVerifiedUser()
+        && isValidUser(incoming(), userId)
+        && (
+          (isOwner(userId) && incoming().role == 'student' && (!('walletBalance' in incoming()) || incoming().walletBalance == 0))
+          || isAdmin()
+        )
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isVerifiedUser()
+        && isValidUser(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            isOwner(userId)
+            && incoming().role == existing().role
+            && (!('walletBalance' in incoming()) || incoming().walletBalance == existing().walletBalance)
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'phone', 'collegeName', 'hostelName', 'roomNumber',
+              'addresses', 'favorites', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if isAdmin();
+      allow create, update, delete: if isValidId(adminId) && isAdmin();
+    }
+
+    match /food_items/{foodId} {
+      allow get: if isValidId(foodId);
+      allow list: if true;
+      allow create: if isValidId(foodId)
+        && isAdmin()
+        && isValidFoodItem(incoming(), foodId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(foodId)
+        && isAdmin()
+        && isValidFoodItem(incoming(), foodId)
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(foodId) && isAdmin();
+    }
+
+    match /carts/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isVerifiedUser()
+        && isOwner(userId)
+        && isValidCart(incoming(), userId)
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isVerifiedUser()
+        && isOwner(userId)
+        && isValidCart(incoming(), userId)
+        && incoming().userId == existing().userId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['items', 'couponCode', 'updatedAt']);
+      allow delete: if isValidId(userId) && isOwner(userId);
+    }
+
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(orderId)
+        && isVerifiedUser()
+        && isValidOrder(incoming(), orderId)
+        && incoming().userId == request.auth.uid
+        && incoming().orderStatus == 'placed'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(orderId)
+        && isVerifiedUser()
+        && isValidOrder(incoming(), orderId)
+        && incoming().orderId == existing().orderId
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            isAdmin()
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'orderStatus', 'paymentStatus', 'estimatedDeliveryTime', 'updatedAt'
+            ])
+          )
+          || (
+            existing().userId == request.auth.uid
+            && existing().orderStatus in ['placed', 'accepted']
+            && incoming().orderStatus == 'cancelled'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['orderStatus', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(orderId) && isAdmin();
+    }
+
+    match /subscriptions/{subscriptionId} {
+      allow get: if isValidId(subscriptionId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(subscriptionId)
+        && isVerifiedUser()
+        && isValidSubscription(incoming(), subscriptionId)
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'active'
+        && incoming().remainingMeals == incoming().totalMeals
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(subscriptionId)
+        && isVerifiedUser()
+        && isValidSubscription(incoming(), subscriptionId)
+        && incoming().subscriptionId == existing().subscriptionId
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            existing().userId == request.auth.uid
+            && existing().status in ['active', 'paused']
+            && incoming().status in ['active', 'paused', 'cancelled']
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'preferredMeals', 'deliveryAddress', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(subscriptionId) && isAdmin();
+    }
+
+    match /coupons/{couponCode} {
+      allow get: if isValidId(couponCode);
+      allow list: if true;
+      allow create, update: if isValidId(couponCode) && isAdmin() && isValidCoupon(incoming(), couponCode);
+      allow delete: if isValidId(couponCode) && isAdmin();
+    }
+
+    match /banners/{bannerId} {
+      allow get: if isValidId(bannerId);
+      allow list: if true;
+      allow create, update: if isValidId(bannerId) && isAdmin() && isValidBanner(incoming(), bannerId);
+      allow delete: if isValidId(bannerId) && isAdmin();
+    }
+
+    match /reviews/{reviewId} {
+      allow get: if isValidId(reviewId);
+      allow list: if true;
+      allow create: if isValidId(reviewId)
+        && isVerifiedUser()
+        && isValidReview(incoming(), reviewId)
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/food_items/$(incoming().foodId));
+      allow update: if isValidId(reviewId)
+        && isVerifiedUser()
+        && isValidReview(incoming(), reviewId)
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().foodId == existing().foodId
+        && incoming().createdAt == existing().createdAt
+        && (
+          isAdmin()
+          || (
+            existing().userId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['rating', 'comment'])
+          )
+        );
+      allow delete: if isValidId(reviewId) && (isAdmin() || (isSignedIn() && existing().userId == request.auth.uid));
+    }
+
+    match /feedback/{feedbackId} {
+      allow get: if isValidId(feedbackId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(feedbackId)
+        && isVerifiedUser()
+        && isValidFeedback(incoming(), feedbackId)
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if isValidId(feedbackId) && isAdmin();
+    }
+  }
+}
